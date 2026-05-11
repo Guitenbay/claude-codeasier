@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 ${CLAUDE_PLUGIN_DIR}/scripts/session_hook.py on-start",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/scripts/session_hook.py on-start",
             "timeout": 10
           }
         ]
@@ -18,7 +18,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 ${CLAUDE_PLUGIN_DIR}/scripts/session_hook.py on-end",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/scripts/session_hook.py on-end",
             "timeout": 10
           }
         ]
