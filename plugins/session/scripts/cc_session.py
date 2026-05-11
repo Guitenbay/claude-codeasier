@@ -68,10 +68,11 @@ def resolve_session(index: dict[str, Any], session_id: str | None, allow_pending
     session = latest_active_session(index, cwd=cwd)
     if session is None:
         session = latest_active_session(index)
-    if allow_pending and session is None:
-        session = latest_pending_session(index, "pending-delete", cwd=cwd)
-    if allow_pending and session is None:
-        session = latest_pending_session(index, "pending-delete")
+    for pending_status in ("pending-delete", "pending-archive"):
+        if allow_pending and session is None:
+            session = latest_pending_session(index, pending_status, cwd=cwd)
+        if allow_pending and session is None:
+            session = latest_pending_session(index, pending_status)
     if session is None:
         raise SystemExit("No active session found. Pass an explicit session id.")
     return session
@@ -100,23 +101,65 @@ def copy_or_move(src: Path, dest: Path, move: bool) -> None:
 
 
 def archive_session(index: dict[str, Any], config: dict[str, Any], session: dict[str, Any]) -> int:
+    status = session.get("status")
+
+    if status == "pending-archive":
+        raise SystemExit(f"Session {session['session_id']} is already pending archive. Use 'archive cancel' to revert.")
+
+    if status == "active":
+        session["status"] = "pending-archive"
+        session["updated_at"] = now_iso()
+        save_index(index)
+        print(f"Session {session['session_id']} marked as pending-archive. It will be archived when the session ends.")
+        return 0
+
     transcript = ensure_transcript(session, index)
     destination_dir = resolve_directory(config["archiveDir"], session_variables(session))
     destination = dedupe_destination(destination_dir / safe_session_filename(session))
-    move = session.get("status") != "active"
 
-    if session.get("status") == "active" and config.get("archiveCurrentSessionMode", "copy") != "copy":
-        raise SystemExit("Active session archiving currently supports copy mode only.")
-
-    copy_or_move(transcript, destination, move=move)
+    copy_or_move(transcript, destination, move=True)
     session["archived_at"] = now_iso()
     session["archived_path"] = str(destination)
     session["updated_at"] = now_iso()
-    if move:
-        session["status"] = "archived"
+    session["status"] = "archived"
     save_index(index)
-    action = "Archived" if move else "Archived copy of"
-    print(f"{action} session {session['session_id']} to {destination}")
+    print(f"Archived session {session['session_id']} to {destination}")
+    return 0
+
+
+def archive_cancel(index: dict[str, Any], session: dict[str, Any]) -> int:
+    if session.get("status") != "pending-archive":
+        raise SystemExit(f"Session {session['session_id']} is not pending archive.")
+
+    session["status"] = "active"
+    session["updated_at"] = now_iso()
+    save_index(index)
+    print(f"Session {session['session_id']} pending archive cancelled")
+    return 0
+
+
+def archive_after_end(session_id: str, index: dict[str, Any] | None = None) -> int:
+    if index is None:
+        index = load_index()
+    session = get_session(index, session_id)
+    if session is None:
+        return 0
+
+    if session.get("status") != "pending-archive":
+        return 0
+
+    config = load_config()
+    transcript = ensure_transcript(session, index)
+    destination_dir = resolve_directory(config["archiveDir"], session_variables(session))
+    destination = dedupe_destination(destination_dir / safe_session_filename(session))
+
+    copy_or_move(transcript, destination, move=True)
+    session["archived_at"] = now_iso()
+    session["archived_path"] = str(destination)
+    session["updated_at"] = now_iso()
+    session["status"] = "archived"
+    save_index(index)
+    print(f"Archived session {session['session_id']} to {destination}")
     return 0
 
 
@@ -128,6 +171,9 @@ def delete_session(index: dict[str, Any], config: dict[str, Any], session: dict[
         save_index(index)
         print(f"Session {session['session_id']} marked for deletion. It will be deleted when the session ends.")
         return 0
+
+    if session.get("status") == "pending-archive":
+        raise SystemExit("Refusing to delete a session that is pending archive. Use 'archive cancel' first.")
 
     transcript = ensure_transcript(session, index)
     if mode == "purge":
@@ -240,7 +286,11 @@ def main(argv: list[str]) -> int:
         session = resolve_session(index, None, allow_pending=True)
         return delete_cancel(index, session)
 
-    allow_pending = args.command == "delete"
+    if args.command == "archive" and args.session_id == "cancel":
+        session = resolve_session(index, None, allow_pending=True)
+        return archive_cancel(index, session)
+
+    allow_pending = args.command in ("delete", "archive")
     session = resolve_session(index, args.session_id, allow_pending=allow_pending)
 
     if args.command == "archive":
