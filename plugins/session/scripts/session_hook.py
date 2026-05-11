@@ -59,7 +59,7 @@ def handle_end(payload: dict[str, Any]) -> int:
     if session is not None and session.get("status") == "pending-delete":
         from cc_session import delete_after_end
 
-        return delete_after_end(session_id)
+        return delete_after_end(session_id, index)
 
     upsert_session(
         index,

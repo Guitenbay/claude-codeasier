@@ -6,6 +6,7 @@ from unittest.mock import patch
 
 import pytest
 import session_hook
+from index_store import index_path
 
 
 @pytest.fixture(autouse=True)
@@ -83,10 +84,6 @@ class TestHandleEnd:
                 },
             },
         }
-        import json
-
-        from index_store import index_path
-
         index_path().write_text(json.dumps(index))
 
         cfg = {

@@ -57,7 +57,7 @@ def session_variables(session: dict[str, Any]) -> dict[str, str]:
     }
 
 
-def resolve_session(index: dict[str, Any], session_id: str | None) -> dict[str, Any]:
+def resolve_session(index: dict[str, Any], session_id: str | None, allow_pending: bool = False) -> dict[str, Any]:
     if session_id:
         session = get_session(index, session_id)
         if session is None:
@@ -68,9 +68,9 @@ def resolve_session(index: dict[str, Any], session_id: str | None) -> dict[str, 
     session = latest_active_session(index, cwd=cwd)
     if session is None:
         session = latest_active_session(index)
-    if session is None:
+    if allow_pending and session is None:
         session = latest_pending_session(index, "pending-delete", cwd=cwd)
-    if session is None:
+    if allow_pending and session is None:
         session = latest_pending_session(index, "pending-delete")
     if session is None:
         raise SystemExit("No active session found. Pass an explicit session id.")
@@ -156,15 +156,16 @@ def delete_cancel(index: dict[str, Any], session: dict[str, Any]) -> int:
         raise SystemExit(f"Session {session['session_id']} is not pending deletion.")
 
     session["status"] = "active"
-    del session["delete_mode"]
+    session.pop("delete_mode", None)
     session["updated_at"] = now_iso()
     save_index(index)
-    print(f"Cancelled pending deletion for session {session['session_id']}")
+    print(f"Session {session['session_id']} pending deletion cancelled")
     return 0
 
 
-def delete_after_end(session_id: str) -> int:
-    index = load_index()
+def delete_after_end(session_id: str, index: dict[str, Any] | None = None) -> int:
+    if index is None:
+        index = load_index()
     session = get_session(index, session_id)
     if session is None:
         return 0
@@ -236,10 +237,11 @@ def main(argv: list[str]) -> int:
     index = load_index()
 
     if args.command == "delete" and args.session_id == "cancel":
-        session = resolve_session(index, None)
+        session = resolve_session(index, None, allow_pending=True)
         return delete_cancel(index, session)
 
-    session = resolve_session(index, args.session_id)
+    allow_pending = args.command == "delete"
+    session = resolve_session(index, args.session_id, allow_pending=allow_pending)
 
     if args.command == "archive":
         return archive_session(index, config, session)

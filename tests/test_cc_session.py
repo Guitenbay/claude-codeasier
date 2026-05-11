@@ -343,7 +343,7 @@ class TestResolveSessionFallback:
         with pytest.raises(SystemExit, match="No active session"):
             cc_session.resolve_session(index, None)
 
-    def test_falls_back_to_pending_delete(self):
+    def test_falls_back_to_pending_delete_when_allowed(self):
         index = {
             "sessions": {
                 "s1": {
@@ -359,5 +359,26 @@ class TestResolveSessionFallback:
             mock_cwd = MagicMock()
             mock_cwd.resolve.return_value = Path("/no/match/here")
             mock_path_cls.cwd.return_value = mock_cwd
-            result = cc_session.resolve_session(index, None)
+            result = cc_session.resolve_session(index, None, allow_pending=True)
         assert result["session_id"] == "s1"
+
+    def test_does_not_fall_back_to_pending_delete_by_default(self):
+        index = {
+            "sessions": {
+                "s1": {
+                    "session_id": "s1",
+                    "status": "pending-delete",
+                    "delete_mode": "trash",
+                    "cwd": "/proj",
+                    "updated_at": "2024-01-01T00:00:00Z",
+                },
+            }
+        }
+        with (
+            patch("cc_session.Path") as mock_path_cls,
+            pytest.raises(SystemExit, match="No active session"),
+        ):
+            mock_cwd = MagicMock()
+            mock_cwd.resolve.return_value = Path("/no/match/here")
+            mock_path_cls.cwd.return_value = mock_cwd
+            cc_session.resolve_session(index, None)
