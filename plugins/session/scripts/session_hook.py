@@ -4,19 +4,20 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from typing import Any
 
 from index_store import load_index, now_iso, save_index, upsert_session
 from path_utils import project_slug
 
 
-def read_hook_input() -> dict:
+def read_hook_input() -> dict[str, Any]:
     raw = sys.stdin.read()
     if not raw.strip():
         return {}
     return json.loads(raw)
 
 
-def handle_start(payload: dict) -> int:
+def handle_start(payload: dict[str, Any]) -> int:
     session_id = payload.get("session_id")
     transcript_path = payload.get("transcript_path")
     cwd = payload.get("cwd")
@@ -44,7 +45,7 @@ def handle_start(payload: dict) -> int:
     return 0
 
 
-def handle_end(payload: dict) -> int:
+def handle_end(payload: dict[str, Any]) -> int:
     session_id = payload.get("session_id")
     transcript_path = payload.get("transcript_path")
     cwd = payload.get("cwd")

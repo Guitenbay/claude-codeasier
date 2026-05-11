@@ -22,3 +22,5 @@ pythonpath = ["plugins/session/scripts"]
 pythonVersion = "3.11"
 include = ["plugins/session/scripts", "tests"]
 exclude = [".git"]
+extraPaths = ["plugins/session/scripts"]
+reportImplicitRelativeImport = false

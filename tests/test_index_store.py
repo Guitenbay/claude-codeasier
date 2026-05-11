@@ -68,7 +68,9 @@ class TestSaveIndex:
 class TestGetSession:
     def test_found(self):
         index = {"sessions": {"s1": {"status": "active"}}}
-        assert index_store.get_session(index, "s1")["status"] == "active"
+        result = index_store.get_session(index, "s1")
+        assert result is not None
+        assert result["status"] == "active"
 
     def test_not_found(self):
         index = {"sessions": {}}
@@ -99,6 +101,7 @@ class TestMarkSessionMissing:
     def test_marks_existing(self):
         index = {"sessions": {"s1": {"session_id": "s1", "status": "active"}}}
         result = index_store.mark_session_missing(index, "s1")
+        assert result is not None
         assert result["status"] == "missing"
         assert "updated_at" in result
 
@@ -116,6 +119,7 @@ class TestLatestActiveSession:
             }
         }
         result = index_store.latest_active_session(index)
+        assert result is not None
         assert result["updated_at"] == "2024-06-01T00:00:00Z"
 
     def test_returns_none_when_empty(self):
@@ -129,6 +133,7 @@ class TestLatestActiveSession:
             }
         }
         result = index_store.latest_active_session(index, cwd="/b")
+        assert result is not None
         assert result["cwd"] == "/b"
 
     def test_falls_back_when_cwd_no_match(self):

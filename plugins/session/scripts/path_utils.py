@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+from typing import Any
 
 _TEMPLATE_PATTERN = re.compile(r"\$\{([a-zA-Z0-9_]+)\}")
 
@@ -24,7 +25,7 @@ def resolve_directory(template: str, variables: dict[str, str]) -> Path:
     return Path(expanded).expanduser().resolve()
 
 
-def safe_session_filename(session: dict) -> str:
+def safe_session_filename(session: dict[str, Any]) -> str:
     started_at = session.get("started_at", "unknown")
     safe_started_at = started_at.replace(":", "-")
     session_id = session["session_id"]
