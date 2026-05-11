@@ -5,7 +5,7 @@ import argparse
 import json
 import sys
 
-from index_store import now_iso, load_index, save_index, upsert_session
+from index_store import load_index, now_iso, save_index, upsert_session
 from path_utils import project_slug
 
 

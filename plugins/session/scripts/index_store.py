@@ -7,7 +7,6 @@ from typing import Any
 
 from config import ensure_state_dir, state_dir
 
-
 INDEX_VERSION = 1
 
 

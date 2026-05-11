@@ -4,7 +4,6 @@ import json
 from pathlib import Path
 from typing import Any
 
-
 PLUGIN_NAME = "session"
 DEFAULT_ARCHIVE_DIR = "~/.claude/projects/${project_slug}/.archive/sessions"
 DEFAULT_TRASH_DIR = "~/.claude/projects/${project_slug}/.trash/sessions"

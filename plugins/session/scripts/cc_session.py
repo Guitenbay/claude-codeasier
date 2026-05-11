@@ -134,13 +134,14 @@ def delete_session(index: dict[str, Any], config: dict[str, Any], session: dict[
 
 
 def validate_directory_template(label: str, value: str, current: dict[str, Any]) -> None:
-    candidate = resolve_directory(value, {"project_slug": "example-project", "project_dir": str(Path.cwd()), "session_id": "example-session"})
+    _vars = {"project_slug": "example-project", "project_dir": str(Path.cwd()), "session_id": "example-session"}
+    candidate = resolve_directory(value, _vars)
     if candidate.name.endswith(".jsonl"):
         raise SystemExit(f"{label} must be a directory path, not a transcript file path.")
 
     other_key = "trashDir" if label == "archiveDir" else "archiveDir"
     other_value = current.get(other_key, DEFAULT_CONFIG[other_key])
-    other_candidate = resolve_directory(other_value, {"project_slug": "example-project", "project_dir": str(Path.cwd()), "session_id": "example-session"})
+    other_candidate = resolve_directory(other_value, _vars)
     if candidate == other_candidate:
         raise SystemExit("archiveDir and trashDir must be different.")
 
