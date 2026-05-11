@@ -205,7 +205,7 @@ class TestDeleteCancel:
 
 class TestDeleteAfterEnd:
     def test_deletes_pending_delete_session(self, sample_session, tmp_path: Path):
-        session, transcript = sample_session
+        session, _ = sample_session
         session["status"] = "pending-delete"
         session["delete_mode"] = "trash"
         cfg = dict(config.DEFAULT_CONFIG)
