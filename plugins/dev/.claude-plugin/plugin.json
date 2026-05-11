@@ -1,7 +1,7 @@
 {
   "name": "dev",
   "description": "Developer workflow helpers for environment setup, issues, pull requests, and git worktrees.",
-  "version": "0.1.0",
+  "version": "0.1.0.d3b8632",
   "author": {
     "name": "test1"
   }
