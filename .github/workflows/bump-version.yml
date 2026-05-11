@@ -1,0 +1,44 @@
+name: Bump plugin versions
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  bump-versions:
+    if: "!contains(github.event.head_commit.message, '[skip ci]')"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get short SHA
+        id: sha
+        run: echo "short=$(git rev-parse --short=7 HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Update plugin versions
+        id: update
+        run: |
+          changed=false
+          for f in plugins/*/.claude-plugin/plugin.json; do
+            [ -f "$f" ] || continue
+            current=$(jq -r '.version' "$f")
+            base=$(echo "$current" | sed -E 's/\.[0-9a-f]{4,}$//')
+            new_version="${base}.${{ steps.sha.outputs.short }}"
+            [ "$current" = "$new_version" ] && continue
+            jq --arg v "$new_version" '.version = $v' "$f" > tmp.json && mv tmp.json "$f"
+            echo "$f: $current -> $new_version"
+            changed=true
+          done
+          echo "changed=$changed" >> "$GITHUB_OUTPUT"
+
+      - name: Commit and push
+        if: steps.update.outputs.changed == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add plugins/*/.claude-plugin/plugin.json
+          git commit -m "chore: bump plugin versions [skip ci]"
+          git push
