@@ -1,5 +1,4 @@
 ---
-name: review
 description: Review a historical Claude Code session by session id, or review the current session only when no session id is provided.
 disable-model-invocation: true
 argument-hint: <troubleshoot|summary> [session-id] [focus]

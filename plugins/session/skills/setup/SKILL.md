@@ -1,5 +1,4 @@
 ---
-name: setup
 description: Configure the session plugin, including archive and trash directories.
 disable-model-invocation: true
 argument-hint: [archive-dir|trash-dir|show|reset] [value]
