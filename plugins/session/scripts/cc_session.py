@@ -8,7 +8,15 @@ from pathlib import Path
 from typing import Any
 
 from config import DEFAULT_CONFIG, load_config, save_config
-from index_store import get_session, latest_active_session, load_index, mark_session_missing, now_iso, save_index
+from index_store import (
+    get_session,
+    latest_active_session,
+    latest_pending_session,
+    load_index,
+    mark_session_missing,
+    now_iso,
+    save_index,
+)
 from path_utils import dedupe_destination, project_slug, resolve_directory, safe_session_filename
 
 
@@ -56,9 +64,14 @@ def resolve_session(index: dict[str, Any], session_id: str | None) -> dict[str, 
             raise SystemExit(f"Session not found: {session_id}")
         return session
 
-    session = latest_active_session(index, cwd=str(Path.cwd().resolve()))
+    cwd = str(Path.cwd().resolve())
+    session = latest_active_session(index, cwd=cwd)
     if session is None:
         session = latest_active_session(index)
+    if session is None:
+        session = latest_pending_session(index, "pending-delete", cwd=cwd)
+    if session is None:
+        session = latest_pending_session(index, "pending-delete")
     if session is None:
         raise SystemExit("No active session found. Pass an explicit session id.")
     return session
@@ -109,7 +122,12 @@ def archive_session(index: dict[str, Any], config: dict[str, Any], session: dict
 
 def delete_session(index: dict[str, Any], config: dict[str, Any], session: dict[str, Any], mode: str) -> int:
     if session.get("status") == "active":
-        raise SystemExit("Refusing to delete an active session.")
+        session["status"] = "pending-delete"
+        session["delete_mode"] = mode
+        session["updated_at"] = now_iso()
+        save_index(index)
+        print(f"Session {session['session_id']} marked for deletion. It will be deleted when the session ends.")
+        return 0
 
     transcript = ensure_transcript(session, index)
     if mode == "purge":
@@ -131,6 +149,31 @@ def delete_session(index: dict[str, Any], config: dict[str, Any], session: dict[
     else:
         print(f"Moved session {session['session_id']} to trash at {destination}")
     return 0
+
+
+def delete_cancel(index: dict[str, Any], session: dict[str, Any]) -> int:
+    if session.get("status") != "pending-delete":
+        raise SystemExit(f"Session {session['session_id']} is not pending deletion.")
+
+    session["status"] = "active"
+    del session["delete_mode"]
+    session["updated_at"] = now_iso()
+    save_index(index)
+    print(f"Cancelled pending deletion for session {session['session_id']}")
+    return 0
+
+
+def delete_after_end(session_id: str) -> int:
+    index = load_index()
+    session = get_session(index, session_id)
+    if session is None:
+        return 0
+
+    if session.get("status") != "pending-delete":
+        return 0
+
+    config = load_config()
+    return delete_session(index, config, session, session.get("delete_mode", "trash"))
 
 
 def validate_directory_template(label: str, value: str, current: dict[str, Any]) -> None:
@@ -191,6 +234,11 @@ def main(argv: list[str]) -> int:
         return setup_reset(args.key)
 
     index = load_index()
+
+    if args.command == "delete" and args.session_id == "cancel":
+        session = resolve_session(index, None)
+        return delete_cancel(index, session)
+
     session = resolve_session(index, args.session_id)
 
     if args.command == "archive":

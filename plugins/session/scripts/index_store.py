@@ -67,3 +67,14 @@ def latest_active_session(index: dict[str, Any], cwd: str | None = None) -> dict
     if not candidates:
         return None
     return max(candidates, key=lambda item: item.get("updated_at", item.get("started_at", "")))
+
+
+def latest_pending_session(index: dict[str, Any], status: str, cwd: str | None = None) -> dict[str, Any] | None:
+    candidates = [session for session in index["sessions"].values() if session.get("status") == status]
+    if cwd is not None:
+        cwd_candidates = [session for session in candidates if session.get("cwd") == cwd]
+        if cwd_candidates:
+            candidates = cwd_candidates
+    if not candidates:
+        return None
+    return max(candidates, key=lambda item: item.get("updated_at", item.get("started_at", "")))

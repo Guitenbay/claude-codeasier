@@ -6,7 +6,7 @@ import json
 import sys
 from typing import Any
 
-from index_store import load_index, now_iso, save_index, upsert_session
+from index_store import get_session, load_index, now_iso, save_index, upsert_session
 from path_utils import project_slug
 
 
@@ -53,6 +53,14 @@ def handle_end(payload: dict[str, Any]) -> int:
         return 0
 
     index = load_index()
+
+    # Check pending-delete BEFORE setting ended (per review: avoid ended overwriting pending-delete)
+    session = get_session(index, session_id)
+    if session is not None and session.get("status") == "pending-delete":
+        from cc_session import delete_after_end
+
+        return delete_after_end(session_id)
+
     upsert_session(
         index,
         session_id,
