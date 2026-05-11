@@ -40,8 +40,8 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install basedpyright
-        run: pip install basedpyright
+      - name: Install basedpyright and dependencies
+        run: pip install basedpyright pytest
 
       - name: Run basedpyright
         run: basedpyright
