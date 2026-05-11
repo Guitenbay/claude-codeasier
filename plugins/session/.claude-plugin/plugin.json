@@ -1,0 +1,8 @@
+{
+  "name": "session",
+  "description": "Manage Claude Code session transcripts with archive, trash, review, and lifecycle hooks.",
+  "version": "0.1.0",
+  "author": {
+    "name": "test1"
+  }
+}

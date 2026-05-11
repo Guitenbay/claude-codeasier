@@ -1,0 +1,29 @@
+{
+  "name": "claude-codeasier",
+  "owner": {
+    "name": "codeasier"
+  },
+  "description": "Claude Code plugin marketplace for reusable productivity and workflow plugins.",
+  "plugins": [
+    {
+      "name": "session",
+      "description": "Manage Claude Code session transcripts with archive, trash, review, and lifecycle hooks.",
+      "source": "./plugins/session"
+    },
+    {
+      "name": "dev",
+      "description": "Developer workflow helpers for environment setup, issues, pull requests, and git worktrees.",
+      "source": "./plugins/dev"
+    },
+    {
+      "name": "docs",
+      "description": "Documentation governance workflows for structure, links, multilingual docs, and project consistency.",
+      "source": "./plugins/docs"
+    },
+    {
+      "name": "release",
+      "description": "Release preparation workflows for changelog, PR, tag, and publish readiness checks.",
+      "source": "./plugins/release"
+    }
+  ]
+}
