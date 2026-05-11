@@ -6,6 +6,7 @@ from unittest.mock import patch
 
 import pytest
 import session_hook
+from index_store import index_path
 
 
 @pytest.fixture(autouse=True)
@@ -62,6 +63,44 @@ class TestHandleEnd:
         session_hook.handle_start({"session_id": "s1", "transcript_path": "/tmp/x", "cwd": "/proj"})
         result = session_hook.handle_end({"session_id": "s1"})
         assert result == 0
+
+    def test_deletes_pending_delete_session_on_end(self, tmp_path: Path):
+        """Session in pending-delete status should be deleted when SessionEnd fires."""
+        transcript = tmp_path / "t.jsonl"
+        transcript.write_text("data\n")
+
+        index = {
+            "version": 1,
+            "sessions": {
+                "s1": {
+                    "session_id": "s1",
+                    "cwd": str(tmp_path),
+                    "project_slug": "test",
+                    "transcript_path": str(transcript),
+                    "status": "pending-delete",
+                    "delete_mode": "trash",
+                    "started_at": "2024-01-15T10:00:00Z",
+                    "updated_at": "2024-01-15T10:00:00Z",
+                },
+            },
+        }
+        index_path().write_text(json.dumps(index))
+
+        cfg = {
+            "archiveDir": str(tmp_path / "archive"),
+            "trashDir": str(tmp_path / "trash" / "${project_slug}"),
+            "defaultDeleteMode": "trash",
+            "archiveCurrentSessionMode": "copy",
+        }
+        with patch("cc_session.load_config", return_value=cfg):
+            result = session_hook.handle_end({"session_id": "s1", "cwd": str(tmp_path)})
+        assert result == 0
+
+        from index_store import load_index
+
+        idx = load_index()
+        assert idx["sessions"]["s1"]["status"] == "deleted"
+        assert not transcript.exists()
 
 
 class TestReadHookInput:

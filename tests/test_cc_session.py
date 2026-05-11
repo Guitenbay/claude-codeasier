@@ -148,13 +148,15 @@ class TestArchiveSession:
 
 
 class TestDeleteSession:
-    def test_refuses_to_delete_active(self, sample_session, tmp_path: Path):
+    def test_marks_active_session_pending_delete(self, sample_session, tmp_path: Path):
         session, _ = sample_session
         cfg = dict(config.DEFAULT_CONFIG)
         index = {"version": 1, "sessions": {session["session_id"]: session}}
 
-        with pytest.raises(SystemExit, match="Refusing to delete"):
-            cc_session.delete_session(index, cfg, session, "trash")
+        result = cc_session.delete_session(index, cfg, session, "trash")
+        assert result == 0
+        assert session["status"] == "pending-delete"
+        assert session["delete_mode"] == "trash"
 
     def test_trash_mode(self, sample_session, tmp_path: Path):
         session, transcript = sample_session
@@ -179,6 +181,57 @@ class TestDeleteSession:
         assert result == 0
         assert not transcript.exists()
         assert session["delete_mode"] == "purge"
+
+
+class TestDeleteCancel:
+    def test_cancels_pending_delete(self, sample_session):
+        session, _ = sample_session
+        session["status"] = "pending-delete"
+        session["delete_mode"] = "trash"
+        index = {"version": 1, "sessions": {session["session_id"]: session}}
+
+        result = cc_session.delete_cancel(index, session)
+        assert result == 0
+        assert session["status"] == "active"
+        assert "delete_mode" not in session
+
+    def test_raises_when_not_pending_delete(self, sample_session):
+        session, _ = sample_session
+        index = {"version": 1, "sessions": {session["session_id"]: session}}
+
+        with pytest.raises(SystemExit, match="not pending deletion"):
+            cc_session.delete_cancel(index, session)
+
+
+class TestDeleteAfterEnd:
+    def test_deletes_pending_delete_session(self, sample_session, tmp_path: Path):
+        session, _ = sample_session
+        session["status"] = "pending-delete"
+        session["delete_mode"] = "trash"
+        cfg = dict(config.DEFAULT_CONFIG)
+        cfg["trashDir"] = str(tmp_path / "trash" / "${project_slug}")
+        index = {"version": 1, "sessions": {session["session_id"]: session}}
+
+        with patch("cc_session.load_index", return_value=index), patch("cc_session.load_config", return_value=cfg):
+            result = cc_session.delete_after_end(session["session_id"])
+        assert result == 0
+        assert session["status"] == "deleted"
+
+    def test_returns_0_when_session_not_pending(self, sample_session):
+        session, _ = sample_session
+        session["status"] = "active"
+        index = {"version": 1, "sessions": {session["session_id"]: session}}
+
+        with patch("cc_session.load_index", return_value=index):
+            result = cc_session.delete_after_end(session["session_id"])
+        assert result == 0
+
+    def test_returns_0_when_session_missing(self):
+        index = {"version": 1, "sessions": {}}
+
+        with patch("cc_session.load_index", return_value=index):
+            result = cc_session.delete_after_end("nonexistent")
+        assert result == 0
 
 
 class TestResolveSession:
@@ -288,4 +341,44 @@ class TestResolveSessionFallback:
     def test_raises_when_no_active(self):
         index = {"sessions": {"s1": {"session_id": "s1", "status": "ended"}}}
         with pytest.raises(SystemExit, match="No active session"):
+            cc_session.resolve_session(index, None)
+
+    def test_falls_back_to_pending_delete_when_allowed(self):
+        index = {
+            "sessions": {
+                "s1": {
+                    "session_id": "s1",
+                    "status": "pending-delete",
+                    "delete_mode": "trash",
+                    "cwd": "/proj",
+                    "updated_at": "2024-01-01T00:00:00Z",
+                },
+            }
+        }
+        with patch("cc_session.Path") as mock_path_cls:
+            mock_cwd = MagicMock()
+            mock_cwd.resolve.return_value = Path("/no/match/here")
+            mock_path_cls.cwd.return_value = mock_cwd
+            result = cc_session.resolve_session(index, None, allow_pending=True)
+        assert result["session_id"] == "s1"
+
+    def test_does_not_fall_back_to_pending_delete_by_default(self):
+        index = {
+            "sessions": {
+                "s1": {
+                    "session_id": "s1",
+                    "status": "pending-delete",
+                    "delete_mode": "trash",
+                    "cwd": "/proj",
+                    "updated_at": "2024-01-01T00:00:00Z",
+                },
+            }
+        }
+        with (
+            patch("cc_session.Path") as mock_path_cls,
+            pytest.raises(SystemExit, match="No active session"),
+        ):
+            mock_cwd = MagicMock()
+            mock_cwd.resolve.return_value = Path("/no/match/here")
+            mock_path_cls.cwd.return_value = mock_cwd
             cc_session.resolve_session(index, None)
