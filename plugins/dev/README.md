@@ -14,13 +14,13 @@ Developer workflow helpers for environment setup, issues, pull requests, and git
 ## Local development
 
 ```bash
-claude --plugin-dir ./dev
+claude --plugin-dir ./plugins/dev
 ```
 
 ## Install from local marketplace
 
 ```text
-/plugin marketplace add ./claude-codeasier
+/plugin marketplace add .
 /plugin install dev@claude-codeasier
 /reload-plugins
 ```

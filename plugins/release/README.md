@@ -9,13 +9,13 @@ Release preparation workflows for changelog, PR, tag, and publish readiness chec
 ## Local development
 
 ```bash
-claude --plugin-dir ./release
+claude --plugin-dir ./plugins/release
 ```
 
 ## Install from local marketplace
 
 ```text
-/plugin marketplace add ./claude-codeasier
+/plugin marketplace add .
 /plugin install release@claude-codeasier
 /reload-plugins
 ```
