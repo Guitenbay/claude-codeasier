@@ -6,8 +6,10 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/scripts/session_hook.py on-start",
-            "timeout": 10
+            "command": "python3",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/session_hook.py", "on-start"],
+            "timeout": 10,
+            "statusMessage": "Tracking session start"
           }
         ]
       }
@@ -18,8 +20,10 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/scripts/session_hook.py on-end",
-            "timeout": 10
+            "command": "python3",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/session_hook.py", "on-end"],
+            "timeout": 10,
+            "statusMessage": "Finalizing session record"
           }
         ]
       }
