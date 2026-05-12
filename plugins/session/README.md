@@ -29,7 +29,7 @@ session/
 Run Claude Code with the plugin directly:
 
 ```bash
-claude --plugin-dir ./session
+claude --plugin-dir ./plugins/session
 ```
 
 Then reload plugins if needed:
@@ -43,7 +43,7 @@ Then reload plugins if needed:
 If you are using the local `claude-codeasier` marketplace in this repository:
 
 ```text
-/plugin marketplace add ./claude-codeasier
+/plugin marketplace add .
 /plugin install session@claude-codeasier
 /reload-plugins
 ```

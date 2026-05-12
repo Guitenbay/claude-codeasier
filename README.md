@@ -4,22 +4,42 @@ A Claude Code plugin marketplace for reusable workflow and productivity plugins.
 
 Current plugins:
 
-- `session-keeper`
+- `session`
+- `dev`
+- `docs`
+- `release`
 
-## Local marketplace usage
+## Marketplace usage
+
+### Local repository
 
 Add this marketplace from the current repository:
 
 ```text
-/plugin marketplace add ./claude-codeasier
+/plugin marketplace add .
 ```
 
-Install `session-keeper`:
+### Remote repository
+
+Add this marketplace from GitHub:
 
 ```text
-/plugin install session-keeper@claude-codeasier
+/plugin marketplace add codeasier/claude-codeasier
+```
+
+Install `session`:
+
+```text
+/plugin install session@claude-codeasier
 /reload-plugins
 ```
+
+For other plugins, replace `session` with one of: `dev`, `docs`, `release`.
+
+- `session`: `plugins/session/README.md`
+- `dev`: `plugins/dev/README.md`
+- `docs`: `plugins/docs/README.md`
+- `release`: `plugins/release/README.md`
 
 ## Repository structure
 
@@ -27,7 +47,10 @@ Install `session-keeper`:
 claude-codeasier/
 ├── .claude-plugin/marketplace.json
 └── plugins/
-    └── session-keeper/
+    ├── session/
+    ├── dev/
+    ├── docs/
+    └── release/
 ```
 
 ## Marketplace name
@@ -52,18 +75,4 @@ Then register it in:
 
 ```text
 claude-codeasier/.claude-plugin/marketplace.json
-```
-
-## Remote usage
-
-Once this directory is pushed to a git repository containing `.claude-plugin/marketplace.json`, users can add it with:
-
-```text
-/plugin marketplace add <owner>/<repo>
-```
-
-Then install plugins by name:
-
-```text
-/plugin install <plugin-name>@claude-codeasier
 ```
