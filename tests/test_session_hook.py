@@ -46,7 +46,6 @@ class TestHandleStart:
 
 class TestHandleEnd:
     def test_updates_status(self):
-        # First start a session
         session_hook.handle_start({"session_id": "s1", "transcript_path": "/tmp/x", "cwd": "/proj"})
         result = session_hook.handle_end({"session_id": "s1", "cwd": "/proj"})
         assert result == 0
@@ -102,6 +101,43 @@ class TestHandleEnd:
         assert idx["sessions"]["s1"]["status"] == "deleted"
         assert not transcript.exists()
 
+    def test_archives_pending_archive_session_on_end(self, tmp_path: Path):
+        """Session in pending-archive status should be archived when SessionEnd fires."""
+        transcript = tmp_path / "t.jsonl"
+        transcript.write_text("data\n")
+
+        index = {
+            "version": 1,
+            "sessions": {
+                "s1": {
+                    "session_id": "s1",
+                    "cwd": str(tmp_path),
+                    "project_slug": "test",
+                    "transcript_path": str(transcript),
+                    "status": "pending-archive",
+                    "started_at": "2024-01-15T10:00:00Z",
+                    "updated_at": "2024-01-15T10:00:00Z",
+                },
+            },
+        }
+        index_path().write_text(json.dumps(index))
+
+        cfg = {
+            "archiveDir": str(tmp_path / "archive" / "${project_slug}"),
+            "trashDir": str(tmp_path / "trash"),
+            "defaultDeleteMode": "trash",
+            "archiveCurrentSessionMode": "copy",
+        }
+        with patch("cc_session.load_config", return_value=cfg):
+            result = session_hook.handle_end({"session_id": "s1", "cwd": str(tmp_path)})
+        assert result == 0
+
+        from index_store import load_index
+
+        idx = load_index()
+        assert idx["sessions"]["s1"]["status"] == "archived"
+        assert not transcript.exists()
+
 
 class TestReadHookInput:
     def _fake_stdin(self, text: str):
@@ -131,7 +167,6 @@ class TestMain:
         assert result == 0
 
     def test_on_end(self):
-        # First create a session
         start_payload = json.dumps({"session_id": "s1", "transcript_path": "/tmp/x", "cwd": "/proj"})
         with patch("sys.stdin", type("S", (), {"read": lambda _self: start_payload})()):
             session_hook.main(["on-start"])

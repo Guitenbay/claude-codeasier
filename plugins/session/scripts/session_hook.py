@@ -54,12 +54,17 @@ def handle_end(payload: dict[str, Any]) -> int:
 
     index = load_index()
 
-    # Check pending-delete BEFORE setting ended (per review: avoid ended overwriting pending-delete)
+    # Check pending states BEFORE setting ended (avoid ended overwriting pending status)
     session = get_session(index, session_id)
     if session is not None and session.get("status") == "pending-delete":
         from cc_session import delete_after_end
 
         return delete_after_end(session_id, index)
+
+    if session is not None and session.get("status") == "pending-archive":
+        from cc_session import archive_after_end
+
+        return archive_after_end(session_id, index)
 
     upsert_session(
         index,

@@ -9,13 +9,13 @@ Documentation governance workflows for structure, links, multilingual docs, and 
 ## Local development
 
 ```bash
-claude --plugin-dir ./docs
+claude --plugin-dir ./plugins/docs
 ```
 
 ## Install from local marketplace
 
 ```text
-/plugin marketplace add ./claude-codeasier
+/plugin marketplace add .
 /plugin install docs@claude-codeasier
 /reload-plugins
 ```

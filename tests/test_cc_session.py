@@ -123,7 +123,7 @@ class TestSetupReset:
 
 
 class TestArchiveSession:
-    def test_archives_active_session_copy(self, sample_session, tmp_path: Path):
+    def test_marks_active_session_pending_archive(self, sample_session, tmp_path: Path):
         session, transcript = sample_session
         cfg = dict(config.DEFAULT_CONFIG)
         cfg["archiveDir"] = str(tmp_path / "archive" / "${project_slug}")
@@ -131,9 +131,17 @@ class TestArchiveSession:
 
         result = cc_session.archive_session(index, cfg, session)
         assert result == 0
-        # Original should still exist (copy mode for active sessions)
+        assert session["status"] == "pending-archive"
         assert transcript.exists()
-        assert session.get("archived_at") is not None
+
+    def test_errors_on_already_pending_archive(self, sample_session, tmp_path: Path):
+        session, _ = sample_session
+        session["status"] = "pending-archive"
+        cfg = dict(config.DEFAULT_CONFIG)
+        index = {"version": 1, "sessions": {session["session_id"]: session}}
+
+        with pytest.raises(SystemExit, match="already pending archive"):
+            cc_session.archive_session(index, cfg, session)
 
     def test_archives_ended_session_move(self, sample_session, tmp_path: Path):
         session, transcript = sample_session
@@ -147,6 +155,54 @@ class TestArchiveSession:
         assert not transcript.exists()
 
 
+class TestArchiveCancel:
+    def test_cancels_pending_archive(self, sample_session):
+        session, _ = sample_session
+        session["status"] = "pending-archive"
+        index = {"version": 1, "sessions": {session["session_id"]: session}}
+
+        result = cc_session.archive_cancel(index, session)
+        assert result == 0
+        assert session["status"] == "active"
+
+    def test_errors_when_not_pending(self, sample_session):
+        session, _ = sample_session
+        index = {"version": 1, "sessions": {session["session_id"]: session}}
+
+        with pytest.raises(SystemExit, match="not pending archive"):
+            cc_session.archive_cancel(index, session)
+
+
+class TestArchiveAfterEnd:
+    def test_archives_pending_archive_session(self, sample_session, tmp_path: Path):
+        session, _ = sample_session
+        session["status"] = "pending-archive"
+        cfg = dict(config.DEFAULT_CONFIG)
+        cfg["archiveDir"] = str(tmp_path / "archive" / "${project_slug}")
+        index = {"version": 1, "sessions": {session["session_id"]: session}}
+
+        with patch("cc_session.load_index", return_value=index), patch("cc_session.load_config", return_value=cfg):
+            result = cc_session.archive_after_end(session["session_id"])
+        assert result == 0
+        assert session["status"] == "archived"
+
+    def test_returns_0_when_session_not_pending(self, sample_session):
+        session, _ = sample_session
+        session["status"] = "active"
+        index = {"version": 1, "sessions": {session["session_id"]: session}}
+
+        with patch("cc_session.load_index", return_value=index):
+            result = cc_session.archive_after_end(session["session_id"])
+        assert result == 0
+
+    def test_returns_0_when_session_missing(self):
+        index = {"version": 1, "sessions": {}}
+
+        with patch("cc_session.load_index", return_value=index):
+            result = cc_session.archive_after_end("nonexistent")
+        assert result == 0
+
+
 class TestDeleteSession:
     def test_marks_active_session_pending_delete(self, sample_session, tmp_path: Path):
         session, _ = sample_session
@@ -157,6 +213,15 @@ class TestDeleteSession:
         assert result == 0
         assert session["status"] == "pending-delete"
         assert session["delete_mode"] == "trash"
+
+    def test_refuses_to_delete_pending_archive(self, sample_session, tmp_path: Path):
+        session, _ = sample_session
+        session["status"] = "pending-archive"
+        cfg = dict(config.DEFAULT_CONFIG)
+        index = {"version": 1, "sessions": {session["session_id"]: session}}
+
+        with pytest.raises(SystemExit, match="pending archive"):
+            cc_session.delete_session(index, cfg, session, "trash")
 
     def test_trash_mode(self, sample_session, tmp_path: Path):
         session, transcript = sample_session
@@ -382,3 +447,21 @@ class TestResolveSessionFallback:
             mock_cwd.resolve.return_value = Path("/no/match/here")
             mock_path_cls.cwd.return_value = mock_cwd
             cc_session.resolve_session(index, None)
+
+    def test_falls_back_to_pending_archive_when_allowed(self):
+        index = {
+            "sessions": {
+                "s1": {
+                    "session_id": "s1",
+                    "status": "pending-archive",
+                    "cwd": "/proj",
+                    "updated_at": "2024-01-01T00:00:00Z",
+                },
+            }
+        }
+        with patch("cc_session.Path") as mock_path_cls:
+            mock_cwd = MagicMock()
+            mock_cwd.resolve.return_value = Path("/no/match/here")
+            mock_path_cls.cwd.return_value = mock_cwd
+            result = cc_session.resolve_session(index, None, allow_pending=True)
+        assert result["session_id"] == "s1"
