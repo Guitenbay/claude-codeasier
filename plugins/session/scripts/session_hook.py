@@ -6,7 +6,15 @@ import json
 import sys
 from typing import Any
 
-from index_store import get_session, load_index, locked_index, now_iso, reconcile_stale_sessions, save_index, upsert_session
+from index_store import (
+    get_session,
+    load_index,
+    locked_index,
+    now_iso,
+    reconcile_stale_sessions,
+    save_index,
+    upsert_session,
+)
 from path_utils import project_slug
 
 
