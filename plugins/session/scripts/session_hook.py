@@ -6,7 +6,7 @@ import json
 import sys
 from typing import Any
 
-from index_store import get_session, load_index, now_iso, save_index, upsert_session
+from index_store import get_session, load_index, locked_index, now_iso, save_index, upsert_session
 from path_utils import project_slug
 
 
@@ -24,24 +24,25 @@ def handle_start(payload: dict[str, Any]) -> int:
     if not session_id or not transcript_path or not cwd:
         return 0
 
-    index = load_index()
-    upsert_session(
-        index,
-        session_id,
-        {
-            "session_id": session_id,
-            "cwd": cwd,
-            "project_slug": project_slug(cwd),
-            "transcript_path": transcript_path,
-            "source": payload.get("source"),
-            "model": payload.get("model"),
-            "status": "active",
-            "started_at": payload.get("started_at", now_iso()),
-            "updated_at": now_iso(),
-            "ended_at": None,
-        },
-    )
-    save_index(index)
+    with locked_index():
+        index = load_index()
+        upsert_session(
+            index,
+            session_id,
+            {
+                "session_id": session_id,
+                "cwd": cwd,
+                "project_slug": project_slug(cwd),
+                "transcript_path": transcript_path,
+                "source": payload.get("source"),
+                "model": payload.get("model"),
+                "status": "active",
+                "started_at": payload.get("started_at", now_iso()),
+                "updated_at": now_iso(),
+                "ended_at": None,
+            },
+        )
+        save_index(index)
     return 0
 
 
@@ -52,34 +53,35 @@ def handle_end(payload: dict[str, Any]) -> int:
     if not session_id:
         return 0
 
-    index = load_index()
+    with locked_index():
+        index = load_index()
 
-    # Check pending states BEFORE setting ended (avoid ended overwriting pending status)
-    session = get_session(index, session_id)
-    if session is not None and session.get("status") == "pending-delete":
-        from cc_session import delete_after_end
+        # Check pending states BEFORE setting ended (avoid ended overwriting pending status)
+        session = get_session(index, session_id)
+        if session is not None and session.get("status") == "pending-delete":
+            from cc_session import delete_after_end
 
-        return delete_after_end(session_id, index)
+            return delete_after_end(session_id, index)
 
-    if session is not None and session.get("status") == "pending-archive":
-        from cc_session import archive_after_end
+        if session is not None and session.get("status") == "pending-archive":
+            from cc_session import archive_after_end
 
-        return archive_after_end(session_id, index)
+            return archive_after_end(session_id, index)
 
-    upsert_session(
-        index,
-        session_id,
-        {
-            "session_id": session_id,
-            "cwd": cwd,
-            "project_slug": project_slug(cwd) if cwd else None,
-            "transcript_path": transcript_path,
-            "status": "ended",
-            "ended_at": now_iso(),
-            "updated_at": now_iso(),
-        },
-    )
-    save_index(index)
+        upsert_session(
+            index,
+            session_id,
+            {
+                "session_id": session_id,
+                "cwd": cwd,
+                "project_slug": project_slug(cwd) if cwd else None,
+                "transcript_path": transcript_path,
+                "status": "ended",
+                "ended_at": now_iso(),
+                "updated_at": now_iso(),
+            },
+        )
+        save_index(index)
     return 0
 
 
