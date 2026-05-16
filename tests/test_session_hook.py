@@ -36,12 +36,67 @@ class TestHandleStart:
         assert session_hook.handle_start({}) == 0
         assert session_hook.handle_start({"session_id": "s1"}) == 0
 
-    def test_sets_status_active(self):
-        session_hook.handle_start({"session_id": "s1", "transcript_path": "/tmp/x", "cwd": "/proj"})
+    def test_marks_stale_sessions_ended(self):
+        session_hook.handle_start({"session_id": "old", "transcript_path": "/tmp/old", "cwd": "/proj"})
+        session_hook.handle_start({"session_id": "new", "transcript_path": "/tmp/new", "cwd": "/proj"})
         from index_store import load_index
 
         index = load_index()
-        assert index["sessions"]["s1"]["status"] == "active"
+        assert index["sessions"]["old"]["status"] == "ended"
+        assert index["sessions"]["old"]["ended_at"] is not None
+        assert index["sessions"]["new"]["status"] == "active"
+
+    def test_preserves_pending_sessions_when_reconciling_stale_sessions(self, tmp_path: Path):
+        pending_archive = tmp_path / "archive.jsonl"
+        pending_archive.write_text("archive\n")
+        pending_delete = tmp_path / "delete.jsonl"
+        pending_delete.write_text("delete\n")
+
+        index = {
+            "version": 1,
+            "sessions": {
+                "active": {
+                    "session_id": "active",
+                    "cwd": str(tmp_path),
+                    "project_slug": "test",
+                    "transcript_path": str(tmp_path / "active.jsonl"),
+                    "status": "active",
+                    "started_at": "2024-01-15T10:00:00Z",
+                    "updated_at": "2024-01-15T10:00:00Z",
+                },
+                "pending-archive": {
+                    "session_id": "pending-archive",
+                    "cwd": str(tmp_path),
+                    "project_slug": "test",
+                    "transcript_path": str(pending_archive),
+                    "status": "pending-archive",
+                    "started_at": "2024-01-15T10:00:00Z",
+                    "updated_at": "2024-01-15T10:00:00Z",
+                },
+                "pending-delete": {
+                    "session_id": "pending-delete",
+                    "cwd": str(tmp_path),
+                    "project_slug": "test",
+                    "transcript_path": str(pending_delete),
+                    "status": "pending-delete",
+                    "delete_mode": "trash",
+                    "started_at": "2024-01-15T10:00:00Z",
+                    "updated_at": "2024-01-15T10:00:00Z",
+                },
+            },
+        }
+        index_path().write_text(json.dumps(index))
+
+        result = session_hook.handle_start({"session_id": "new", "transcript_path": "/tmp/new", "cwd": str(tmp_path)})
+        assert result == 0
+
+        from index_store import load_index
+
+        idx = load_index()
+        assert idx["sessions"]["active"]["status"] == "ended"
+        assert idx["sessions"]["pending-archive"]["status"] == "pending-archive"
+        assert idx["sessions"]["pending-delete"]["status"] == "pending-delete"
+        assert idx["sessions"]["new"]["status"] == "active"
 
 
 class TestHandleEnd:

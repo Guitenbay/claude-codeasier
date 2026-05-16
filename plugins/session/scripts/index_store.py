@@ -95,6 +95,20 @@ def mark_session_missing(index: dict[str, Any], session_id: str) -> dict[str, An
     return session
 
 
+def reconcile_stale_sessions(index: dict[str, Any], current_session_id: str | None = None) -> list[dict[str, Any]]:
+    reconciled = []
+    timestamp = now_iso()
+    for session in index["sessions"].values():
+        if session.get("session_id") == current_session_id:
+            continue
+        if session.get("status") == "active":
+            session["status"] = "ended"
+            session["ended_at"] = session.get("ended_at") or timestamp
+            session["updated_at"] = timestamp
+            reconciled.append(session)
+    return reconciled
+
+
 def latest_session_by_status(index: dict[str, Any], status: str, cwd: str | None = None) -> dict[str, Any] | None:
     candidates = [session for session in index["sessions"].values() if session.get("status") == status]
     if cwd is not None:

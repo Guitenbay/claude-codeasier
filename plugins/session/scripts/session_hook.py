@@ -6,7 +6,15 @@ import json
 import sys
 from typing import Any
 
-from index_store import get_session, load_index, locked_index, now_iso, save_index, upsert_session
+from index_store import (
+    get_session,
+    load_index,
+    locked_index,
+    now_iso,
+    reconcile_stale_sessions,
+    save_index,
+    upsert_session,
+)
 from path_utils import project_slug
 
 
@@ -26,6 +34,7 @@ def handle_start(payload: dict[str, Any]) -> int:
 
     with locked_index():
         index = load_index()
+        reconcile_stale_sessions(index, current_session_id=session_id)
         upsert_session(
             index,
             session_id,
