@@ -4,10 +4,11 @@ import fcntl
 import json
 import os
 import tempfile
+from collections.abc import Generator
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any
 
 from config import ensure_state_dir, state_dir
 
@@ -19,7 +20,7 @@ def index_path() -> Path:
 
 
 @contextmanager
-def locked_index() -> Iterator[None]:
+def locked_index() -> Generator[None]:
     ensure_state_dir()
     lock_path = state_dir() / "session-index.lock"
     with lock_path.open("a+") as lock_file:
