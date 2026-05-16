@@ -123,10 +123,26 @@ class TestSetupReset:
 
 
 class TestArchiveSession:
-    def test_marks_active_session_pending_archive(self, sample_session, tmp_path: Path):
+    def test_copies_active_session_by_default(self, sample_session, tmp_path: Path):
         session, transcript = sample_session
         cfg = dict(config.DEFAULT_CONFIG)
         cfg["archiveDir"] = str(tmp_path / "archive" / "${project_slug}")
+        index = {"version": 1, "sessions": {session["session_id"]: session}}
+
+        result = cc_session.archive_session(index, cfg, session)
+        assert result == 0
+        assert session["status"] == "active"
+        assert transcript.exists()
+        archived_path = Path(session["archived_path"])
+        assert archived_path.exists()
+        assert archived_path.read_text() == transcript.read_text()
+        assert archived_path.parent == tmp_path / "archive" / session["project_slug"]
+
+    def test_marks_active_session_pending_archive_when_not_copy_mode(self, sample_session, tmp_path: Path):
+        session, transcript = sample_session
+        cfg = dict(config.DEFAULT_CONFIG)
+        cfg["archiveDir"] = str(tmp_path / "archive" / "${project_slug}")
+        cfg["archiveCurrentSessionMode"] = "defer"
         index = {"version": 1, "sessions": {session["session_id"]: session}}
 
         result = cc_session.archive_session(index, cfg, session)

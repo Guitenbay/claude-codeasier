@@ -108,6 +108,18 @@ def archive_session(index: dict[str, Any], config: dict[str, Any], session: dict
         raise SystemExit(f"Session {session['session_id']} is already pending archive. Use 'archive cancel' to revert.")
 
     if status == "active":
+        if config.get("archiveCurrentSessionMode") == "copy":
+            transcript = ensure_transcript(session, index)
+            destination_dir = resolve_directory(config["archiveDir"], session_variables(session))
+            destination = dedupe_destination(destination_dir / safe_session_filename(session))
+            copy_or_move(transcript, destination, move=False)
+            session["archived_at"] = now_iso()
+            session["archived_path"] = str(destination)
+            session["updated_at"] = now_iso()
+            save_index(index)
+            print(f"Copied active session {session['session_id']} to {destination}")
+            return 0
+
         session["status"] = "pending-archive"
         session["updated_at"] = now_iso()
         save_index(index)
