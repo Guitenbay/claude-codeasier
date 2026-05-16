@@ -1,12 +1,24 @@
 from __future__ import annotations
 
 import json
+import multiprocessing
 from datetime import datetime
 from pathlib import Path
 from unittest.mock import patch
 
 import index_store
 import pytest
+
+
+def write_session_under_lock(state_dir: str, session_id: str) -> None:
+    with (
+        patch("config.state_dir", return_value=Path(state_dir)),
+        patch("index_store.state_dir", return_value=Path(state_dir)),
+        index_store.locked_index(),
+    ):
+        index = index_store.load_index()
+        index_store.upsert_session(index, session_id, {"status": "active"})
+        index_store.save_index(index)
 
 
 @pytest.fixture(autouse=True)
@@ -56,6 +68,16 @@ class TestLoadIndex:
         result = index_store.load_index()
         assert result["version"] == index_store.INDEX_VERSION
 
+    def test_quarantines_corrupt_json(self, isolate_state: Path):
+        path = isolate_state / "session-index.json"
+        path.write_text('{"sessions":')
+        result = index_store.load_index()
+        assert result == {"version": index_store.INDEX_VERSION, "sessions": {}}
+        assert not path.exists()
+        quarantined = list(isolate_state.glob("session-index.json.corrupt-*"))
+        assert len(quarantined) == 1
+        assert quarantined[0].read_text() == '{"sessions":'
+
 
 class TestSaveIndex:
     def test_saves_to_disk(self, isolate_state: Path):
@@ -63,6 +85,20 @@ class TestSaveIndex:
         index_store.save_index(index)
         saved = json.loads((isolate_state / "session-index.json").read_text())
         assert saved == index
+
+    def test_locked_updates_do_not_drop_concurrent_sessions(self, isolate_state: Path):
+        processes = [
+            multiprocessing.Process(target=write_session_under_lock, args=(str(isolate_state), f"s{num}"))
+            for num in range(8)
+        ]
+        for process in processes:
+            process.start()
+        for process in processes:
+            process.join(timeout=5)
+
+        assert all(process.exitcode == 0 for process in processes)
+        saved = json.loads((isolate_state / "session-index.json").read_text())
+        assert sorted(saved["sessions"]) == [f"s{num}" for num in range(8)]
 
 
 class TestGetSession:
