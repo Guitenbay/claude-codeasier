@@ -36,12 +36,15 @@ class TestHandleStart:
         assert session_hook.handle_start({}) == 0
         assert session_hook.handle_start({"session_id": "s1"}) == 0
 
-    def test_sets_status_active(self):
-        session_hook.handle_start({"session_id": "s1", "transcript_path": "/tmp/x", "cwd": "/proj"})
+    def test_marks_stale_sessions_ended(self):
+        session_hook.handle_start({"session_id": "old", "transcript_path": "/tmp/old", "cwd": "/proj"})
+        session_hook.handle_start({"session_id": "new", "transcript_path": "/tmp/new", "cwd": "/proj"})
         from index_store import load_index
 
         index = load_index()
-        assert index["sessions"]["s1"]["status"] == "active"
+        assert index["sessions"]["old"]["status"] == "ended"
+        assert index["sessions"]["old"]["ended_at"] is not None
+        assert index["sessions"]["new"]["status"] == "active"
 
 
 class TestHandleEnd:
