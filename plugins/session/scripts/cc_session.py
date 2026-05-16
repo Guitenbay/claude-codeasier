@@ -219,6 +219,9 @@ def delete_session(
         raise SystemExit("Refusing to delete a session that is pending archive. Use 'archive cancel' first.")
 
     if status == "failed-delete":
+        existing_mode = session.get("delete_mode", mode)
+        if existing_mode != mode:
+            raise SystemExit(f"Session {session['session_id']} previously failed deletion with mode {existing_mode}.")
         clear_failure(session)
 
     transcript = ensure_transcript(session, index)

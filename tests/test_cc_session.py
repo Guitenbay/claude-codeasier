@@ -172,6 +172,21 @@ class TestArchiveSession:
         assert session["status"] == "failed-archive"
         assert session["last_error"] == "permission denied"
 
+    def test_retries_failed_archive_successfully(self, sample_session, tmp_path: Path):
+        session, transcript = sample_session
+        session["status"] = "failed-archive"
+        session["last_error"] = "permission denied"
+        cfg = dict(config.DEFAULT_CONFIG)
+        cfg["archiveDir"] = str(tmp_path / "archive" / "${project_slug}")
+        index = {"version": 1, "sessions": {session["session_id"]: session}}
+
+        result = cc_session.archive_session(index, cfg, session)
+
+        assert result == 0
+        assert session["status"] == "archived"
+        assert "last_error" not in session
+        assert not transcript.exists()
+
 
 class TestArchiveCancel:
     def test_cancels_pending_archive(self, sample_session):
@@ -313,6 +328,33 @@ class TestDeleteSession:
 
         assert session["status"] == "failed-delete"
         assert session["last_error"] == "disk full"
+
+    def test_retries_failed_delete_successfully(self, sample_session, tmp_path: Path):
+        session, transcript = sample_session
+        session["status"] = "failed-delete"
+        session["delete_mode"] = "trash"
+        session["last_error"] = "disk full"
+        cfg = dict(config.DEFAULT_CONFIG)
+        cfg["trashDir"] = str(tmp_path / "trash" / "${project_slug}")
+        index = {"version": 1, "sessions": {session["session_id"]: session}}
+
+        result = cc_session.delete_session(index, cfg, session, "trash")
+
+        assert result == 0
+        assert session["status"] == "deleted"
+        assert session["delete_mode"] == "trash"
+        assert "last_error" not in session
+        assert not transcript.exists()
+
+    def test_failed_delete_different_mode_errors(self, sample_session):
+        session, _ = sample_session
+        session["status"] = "failed-delete"
+        session["delete_mode"] = "trash"
+        cfg = dict(config.DEFAULT_CONFIG)
+        index = {"version": 1, "sessions": {session["session_id"]: session}}
+
+        with pytest.raises(SystemExit, match="previously failed deletion with mode trash"):
+            cc_session.delete_session(index, cfg, session, "purge")
 
 
 class TestDeleteCancel:
