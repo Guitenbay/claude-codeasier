@@ -101,7 +101,7 @@ def reconcile_stale_sessions(index: dict[str, Any], current_session_id: str | No
     for session in index["sessions"].values():
         if session.get("session_id") == current_session_id:
             continue
-        if session.get("status") in {"active", "pending-archive", "pending-delete"}:
+        if session.get("status") == "active":
             session["status"] = "ended"
             session["ended_at"] = session.get("ended_at") or timestamp
             session["updated_at"] = timestamp
