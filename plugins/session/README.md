@@ -66,8 +66,9 @@ Archive a specific session:
 
 Behavior:
 
-- active session: copies transcript into archive
-- ended session: moves transcript into archive
+- active session: marked `pending-archive` and moved into archive when the session ends
+- ended session: moved into archive
+- pending archive can be reverted with `/session:archive cancel`
 
 ### Delete a session
 
@@ -79,8 +80,9 @@ Delete or trash a specific ended session:
 
 Behavior:
 
-- active session: refused
+- active session: marked `pending-delete` and deleted when the session ends
 - ended session: moved to trash by default
+- pending deletion can be reverted with `/session:delete cancel`
 
 ### Review a session
 
