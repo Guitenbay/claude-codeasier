@@ -96,6 +96,13 @@ class TestSaveIndex:
         for process in processes:
             process.join(timeout=5)
 
+        alive_processes = [process for process in processes if process.is_alive()]
+        for process in alive_processes:
+            process.terminate()
+        for process in alive_processes:
+            process.join()
+
+        assert not alive_processes
         assert all(process.exitcode == 0 for process in processes)
         saved = json.loads((isolate_state / "session-index.json").read_text())
         assert sorted(saved["sessions"]) == [f"s{num}" for num in range(8)]
