@@ -150,14 +150,18 @@ class TestArchiveSession:
         assert session["status"] == "pending-archive"
         assert transcript.exists()
 
-    def test_errors_on_already_pending_archive(self, sample_session, tmp_path: Path):
+    def test_already_pending_archive_is_idempotent(self, sample_session, tmp_path: Path, capsys):
         session, _ = sample_session
         session["status"] = "pending-archive"
         cfg = dict(config.DEFAULT_CONFIG)
         index = {"version": 1, "sessions": {session["session_id"]: session}}
 
-        with pytest.raises(SystemExit, match="already pending archive"):
-            cc_session.archive_session(index, cfg, session)
+        result = cc_session.archive_session(index, cfg, session)
+
+        assert result == 0
+        assert session["status"] == "pending-archive"
+        captured = capsys.readouterr()
+        assert "already pending archive" in captured.out
 
     def test_archives_ended_session_move(self, sample_session, tmp_path: Path):
         session, transcript = sample_session
@@ -170,6 +174,37 @@ class TestArchiveSession:
         assert result == 0
         assert not transcript.exists()
 
+    def test_records_failed_archive_on_filesystem_error(self, sample_session, tmp_path: Path):
+        session, _ = sample_session
+        session["status"] = "ended"
+        cfg = dict(config.DEFAULT_CONFIG)
+        cfg["archiveDir"] = str(tmp_path / "archive" / "${project_slug}")
+        index = {"version": 1, "sessions": {session["session_id"]: session}}
+
+        with (
+            patch("cc_session.copy_or_move", side_effect=OSError("permission denied")),
+            pytest.raises(SystemExit, match="Failed to archive session"),
+        ):
+            cc_session.archive_session(index, cfg, session)
+
+        assert session["status"] == "failed-archive"
+        assert session["last_error"] == "permission denied"
+
+    def test_retries_failed_archive_successfully(self, sample_session, tmp_path: Path):
+        session, transcript = sample_session
+        session["status"] = "failed-archive"
+        session["last_error"] = "permission denied"
+        cfg = dict(config.DEFAULT_CONFIG)
+        cfg["archiveDir"] = str(tmp_path / "archive" / "${project_slug}")
+        index = {"version": 1, "sessions": {session["session_id"]: session}}
+
+        result = cc_session.archive_session(index, cfg, session)
+
+        assert result == 0
+        assert session["status"] == "archived"
+        assert "last_error" not in session
+        assert not transcript.exists()
+
 
 class TestArchiveCancel:
     def test_cancels_pending_archive(self, sample_session):
@@ -180,6 +215,17 @@ class TestArchiveCancel:
         result = cc_session.archive_cancel(index, session)
         assert result == 0
         assert session["status"] == "active"
+
+    def test_cancels_failed_archive(self, sample_session):
+        session, _ = sample_session
+        session["status"] = "failed-archive"
+        session["last_error"] = "permission denied"
+        index = {"version": 1, "sessions": {session["session_id"]: session}}
+
+        result = cc_session.archive_cancel(index, session)
+        assert result == 0
+        assert session["status"] == "active"
+        assert "last_error" not in session
 
     def test_errors_when_not_pending(self, sample_session):
         session, _ = sample_session
@@ -263,6 +309,73 @@ class TestDeleteSession:
         assert not transcript.exists()
         assert session["delete_mode"] == "purge"
 
+    def test_pending_delete_same_mode_is_idempotent(self, sample_session, capsys):
+        session, _ = sample_session
+        session["status"] = "pending-delete"
+        session["delete_mode"] = "trash"
+        cfg = dict(config.DEFAULT_CONFIG)
+        index = {"version": 1, "sessions": {session["session_id"]: session}}
+
+        result = cc_session.delete_session(index, cfg, session, "trash")
+
+        assert result == 0
+        assert session["status"] == "pending-delete"
+        captured = capsys.readouterr()
+        assert "already pending deletion" in captured.out
+
+    def test_pending_delete_different_mode_errors(self, sample_session):
+        session, _ = sample_session
+        session["status"] = "pending-delete"
+        session["delete_mode"] = "trash"
+        cfg = dict(config.DEFAULT_CONFIG)
+        index = {"version": 1, "sessions": {session["session_id"]: session}}
+
+        with pytest.raises(SystemExit, match="already pending deletion with mode trash"):
+            cc_session.delete_session(index, cfg, session, "purge")
+
+    def test_records_failed_delete_on_filesystem_error(self, sample_session, tmp_path: Path):
+        session, _ = sample_session
+        session["status"] = "ended"
+        cfg = dict(config.DEFAULT_CONFIG)
+        cfg["trashDir"] = str(tmp_path / "trash" / "${project_slug}")
+        index = {"version": 1, "sessions": {session["session_id"]: session}}
+
+        with (
+            patch("cc_session.copy_or_move", side_effect=OSError("disk full")),
+            pytest.raises(SystemExit, match="Failed to delete session"),
+        ):
+            cc_session.delete_session(index, cfg, session, "trash")
+
+        assert session["status"] == "failed-delete"
+        assert session["last_error"] == "disk full"
+
+    def test_retries_failed_delete_successfully(self, sample_session, tmp_path: Path):
+        session, transcript = sample_session
+        session["status"] = "failed-delete"
+        session["delete_mode"] = "trash"
+        session["last_error"] = "disk full"
+        cfg = dict(config.DEFAULT_CONFIG)
+        cfg["trashDir"] = str(tmp_path / "trash" / "${project_slug}")
+        index = {"version": 1, "sessions": {session["session_id"]: session}}
+
+        result = cc_session.delete_session(index, cfg, session, "trash")
+
+        assert result == 0
+        assert session["status"] == "deleted"
+        assert session["delete_mode"] == "trash"
+        assert "last_error" not in session
+        assert not transcript.exists()
+
+    def test_failed_delete_different_mode_errors(self, sample_session):
+        session, _ = sample_session
+        session["status"] = "failed-delete"
+        session["delete_mode"] = "trash"
+        cfg = dict(config.DEFAULT_CONFIG)
+        index = {"version": 1, "sessions": {session["session_id"]: session}}
+
+        with pytest.raises(SystemExit, match="previously failed deletion with mode trash"):
+            cc_session.delete_session(index, cfg, session, "purge")
+
 
 class TestDeleteCancel:
     def test_cancels_pending_delete(self, sample_session):
@@ -275,6 +388,19 @@ class TestDeleteCancel:
         assert result == 0
         assert session["status"] == "active"
         assert "delete_mode" not in session
+
+    def test_cancels_failed_delete(self, sample_session):
+        session, _ = sample_session
+        session["status"] = "failed-delete"
+        session["delete_mode"] = "trash"
+        session["last_error"] = "disk full"
+        index = {"version": 1, "sessions": {session["session_id"]: session}}
+
+        result = cc_session.delete_cancel(index, session)
+        assert result == 0
+        assert session["status"] == "active"
+        assert "delete_mode" not in session
+        assert "last_error" not in session
 
     def test_raises_when_not_pending_delete(self, sample_session):
         session, _ = sample_session
@@ -347,6 +473,12 @@ class TestEnsureTranscript:
         index = {"version": 1, "sessions": {"s1": session}}
         result = cc_session.ensure_transcript(session, index)
         assert result == transcript
+
+    def test_raises_when_path_is_directory(self, tmp_path: Path):
+        session = {"session_id": "s1", "transcript_path": str(tmp_path)}
+        index = {"version": 1, "sessions": {"s1": session}}
+        with pytest.raises(SystemExit, match="Transcript path is not a file"):
+            cc_session.ensure_transcript(session, index)
 
 
 class TestMain:
@@ -470,6 +602,25 @@ class TestResolveSessionFallback:
                 "s1": {
                     "session_id": "s1",
                     "status": "pending-archive",
+                    "cwd": "/proj",
+                    "updated_at": "2024-01-01T00:00:00Z",
+                },
+            }
+        }
+        with patch("cc_session.Path") as mock_path_cls:
+            mock_cwd = MagicMock()
+            mock_cwd.resolve.return_value = Path("/no/match/here")
+            mock_path_cls.cwd.return_value = mock_cwd
+            result = cc_session.resolve_session(index, None, allow_pending=True)
+        assert result["session_id"] == "s1"
+
+    def test_falls_back_to_failed_delete_when_allowed(self):
+        index = {
+            "sessions": {
+                "s1": {
+                    "session_id": "s1",
+                    "status": "failed-delete",
+                    "delete_mode": "trash",
                     "cwd": "/proj",
                     "updated_at": "2024-01-01T00:00:00Z",
                 },
