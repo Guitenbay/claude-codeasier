@@ -133,7 +133,10 @@ class TestArchiveSession:
         assert result == 0
         assert session["status"] == "active"
         assert transcript.exists()
-        assert Path(session["archived_path"]).exists()
+        archived_path = Path(session["archived_path"])
+        assert archived_path.exists()
+        assert archived_path.read_text() == transcript.read_text()
+        assert archived_path.parent == tmp_path / "archive" / session["project_slug"]
 
     def test_marks_active_session_pending_archive_when_not_copy_mode(self, sample_session, tmp_path: Path):
         session, transcript = sample_session
