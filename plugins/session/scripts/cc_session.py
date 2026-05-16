@@ -68,7 +68,7 @@ def resolve_session(index: dict[str, Any], session_id: str | None, allow_pending
     session = latest_active_session(index, cwd=cwd)
     if session is None:
         session = latest_active_session(index)
-    for pending_status in ("pending-delete", "pending-archive"):
+    for pending_status in ("pending-delete", "failed-delete", "pending-archive", "failed-archive"):
         if allow_pending and session is None:
             session = latest_pending_session(index, pending_status, cwd=cwd)
         if allow_pending and session is None:
@@ -78,14 +78,28 @@ def resolve_session(index: dict[str, Any], session_id: str | None, allow_pending
     return session
 
 
+def set_failure(index: dict[str, Any], session: dict[str, Any], status: str, error: str) -> None:
+    session["status"] = status
+    session["last_error"] = error
+    session["updated_at"] = now_iso()
+    save_index(index)
+
+
+def clear_failure(session: dict[str, Any]) -> None:
+    session.pop("last_error", None)
+
+
 def ensure_transcript(session: dict[str, Any], index: dict[str, Any]) -> Path:
     transcript_path = session.get("transcript_path")
     if not transcript_path:
         raise SystemExit(f"Session {session['session_id']} has no transcript path recorded.")
 
     transcript = Path(transcript_path).expanduser()
-    if transcript.exists():
+    if transcript.is_file():
         return transcript
+
+    if transcript.exists():
+        raise SystemExit(f"Transcript path is not a file: {transcript}")
 
     mark_session_missing(index, session["session_id"])
     save_index(index)
@@ -94,6 +108,8 @@ def ensure_transcript(session: dict[str, Any], index: dict[str, Any]) -> Path:
 
 def copy_or_move(src: Path, dest: Path, move: bool) -> None:
     dest.parent.mkdir(parents=True, exist_ok=True)
+    if dest.exists():
+        raise FileExistsError(f"Destination already exists: {dest}")
     if move:
         shutil.move(str(src), str(dest))
     else:
@@ -104,7 +120,11 @@ def archive_session(index: dict[str, Any], config: dict[str, Any], session: dict
     status = session.get("status")
 
     if status == "pending-archive":
-        raise SystemExit(f"Session {session['session_id']} is already pending archive. Use 'archive cancel' to revert.")
+        print(f"Session {session['session_id']} is already pending archive.")
+        return 0
+
+    if status == "failed-archive":
+        clear_failure(session)
 
     if status == "active":
         session["status"] = "pending-archive"
@@ -117,7 +137,13 @@ def archive_session(index: dict[str, Any], config: dict[str, Any], session: dict
     destination_dir = resolve_directory(config["archiveDir"], session_variables(session))
     destination = dedupe_destination(destination_dir / safe_session_filename(session))
 
-    copy_or_move(transcript, destination, move=True)
+    try:
+        copy_or_move(transcript, destination, move=True)
+    except OSError as exc:
+        set_failure(index, session, "failed-archive", str(exc))
+        raise SystemExit(f"Failed to archive session {session['session_id']}: {exc}") from exc
+
+    clear_failure(session)
     session["archived_at"] = now_iso()
     session["archived_path"] = str(destination)
     session["updated_at"] = now_iso()
@@ -128,10 +154,11 @@ def archive_session(index: dict[str, Any], config: dict[str, Any], session: dict
 
 
 def archive_cancel(index: dict[str, Any], session: dict[str, Any]) -> int:
-    if session.get("status") != "pending-archive":
+    if session.get("status") not in ("pending-archive", "failed-archive"):
         raise SystemExit(f"Session {session['session_id']} is not pending archive.")
 
     session["status"] = "active"
+    clear_failure(session)
     session["updated_at"] = now_iso()
     save_index(index)
     print(f"Session {session['session_id']} pending archive cancelled")
@@ -153,7 +180,13 @@ def archive_after_end(session_id: str, index: dict[str, Any] | None = None) -> i
     destination_dir = resolve_directory(config["archiveDir"], session_variables(session))
     destination = dedupe_destination(destination_dir / safe_session_filename(session))
 
-    copy_or_move(transcript, destination, move=True)
+    try:
+        copy_or_move(transcript, destination, move=True)
+    except OSError as exc:
+        set_failure(index, session, "failed-archive", str(exc))
+        raise SystemExit(f"Failed to archive session {session['session_id']}: {exc}") from exc
+
+    clear_failure(session)
     session["archived_at"] = now_iso()
     session["archived_path"] = str(destination)
     session["updated_at"] = now_iso()
@@ -163,8 +196,11 @@ def archive_after_end(session_id: str, index: dict[str, Any] | None = None) -> i
     return 0
 
 
-def delete_session(index: dict[str, Any], config: dict[str, Any], session: dict[str, Any], mode: str) -> int:
-    if session.get("status") == "active":
+def delete_session(
+    index: dict[str, Any], config: dict[str, Any], session: dict[str, Any], mode: str, execute_pending: bool = False
+) -> int:
+    status = session.get("status")
+    if status == "active":
         session["status"] = "pending-delete"
         session["delete_mode"] = mode
         session["updated_at"] = now_iso()
@@ -172,18 +208,33 @@ def delete_session(index: dict[str, Any], config: dict[str, Any], session: dict[
         print(f"Session {session['session_id']} marked for deletion. It will be deleted when the session ends.")
         return 0
 
-    if session.get("status") == "pending-archive":
+    if status == "pending-delete" and not execute_pending:
+        existing_mode = session.get("delete_mode", mode)
+        if existing_mode != mode:
+            raise SystemExit(f"Session {session['session_id']} is already pending deletion with mode {existing_mode}.")
+        print(f"Session {session['session_id']} is already pending deletion with mode {existing_mode}.")
+        return 0
+
+    if status == "pending-archive":
         raise SystemExit("Refusing to delete a session that is pending archive. Use 'archive cancel' first.")
 
-    transcript = ensure_transcript(session, index)
-    if mode == "purge":
-        transcript.unlink()
-        destination = None
-    else:
-        trash_dir = resolve_directory(config["trashDir"], session_variables(session))
-        destination = dedupe_destination(trash_dir / safe_session_filename(session))
-        copy_or_move(transcript, destination, move=True)
+    if status == "failed-delete":
+        clear_failure(session)
 
+    transcript = ensure_transcript(session, index)
+    try:
+        if mode == "purge":
+            transcript.unlink()
+            destination = None
+        else:
+            trash_dir = resolve_directory(config["trashDir"], session_variables(session))
+            destination = dedupe_destination(trash_dir / safe_session_filename(session))
+            copy_or_move(transcript, destination, move=True)
+    except OSError as exc:
+        set_failure(index, session, "failed-delete", str(exc))
+        raise SystemExit(f"Failed to delete session {session['session_id']} with mode {mode}: {exc}") from exc
+
+    clear_failure(session)
     session["deleted_at"] = now_iso()
     session["delete_mode"] = mode
     session["updated_at"] = now_iso()
@@ -198,11 +249,12 @@ def delete_session(index: dict[str, Any], config: dict[str, Any], session: dict[
 
 
 def delete_cancel(index: dict[str, Any], session: dict[str, Any]) -> int:
-    if session.get("status") != "pending-delete":
+    if session.get("status") not in ("pending-delete", "failed-delete"):
         raise SystemExit(f"Session {session['session_id']} is not pending deletion.")
 
     session["status"] = "active"
     session.pop("delete_mode", None)
+    clear_failure(session)
     session["updated_at"] = now_iso()
     save_index(index)
     print(f"Session {session['session_id']} pending deletion cancelled")
@@ -220,7 +272,7 @@ def delete_after_end(session_id: str, index: dict[str, Any] | None = None) -> in
         return 0
 
     config = load_config()
-    return delete_session(index, config, session, session.get("delete_mode", "trash"))
+    return delete_session(index, config, session, session.get("delete_mode", "trash"), execute_pending=True)
 
 
 def validate_directory_template(label: str, value: str, current: dict[str, Any]) -> None:
