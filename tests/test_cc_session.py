@@ -165,8 +165,9 @@ class TestArchiveSession:
         cfg["archiveDir"] = str(tmp_path / "archive" / "${project_slug}")
         index = {"version": 1, "sessions": {session["session_id"]: session}}
 
-        with patch("cc_session.copy_or_move", side_effect=OSError("permission denied")), pytest.raises(
-            SystemExit, match="Failed to archive session"
+        with (
+            patch("cc_session.copy_or_move", side_effect=OSError("permission denied")),
+            pytest.raises(SystemExit, match="Failed to archive session"),
         ):
             cc_session.archive_session(index, cfg, session)
 
@@ -323,8 +324,9 @@ class TestDeleteSession:
         cfg["trashDir"] = str(tmp_path / "trash" / "${project_slug}")
         index = {"version": 1, "sessions": {session["session_id"]: session}}
 
-        with patch("cc_session.copy_or_move", side_effect=OSError("disk full")), pytest.raises(
-            SystemExit, match="Failed to delete session"
+        with (
+            patch("cc_session.copy_or_move", side_effect=OSError("disk full")),
+            pytest.raises(SystemExit, match="Failed to delete session"),
         ):
             cc_session.delete_session(index, cfg, session, "trash")
 
