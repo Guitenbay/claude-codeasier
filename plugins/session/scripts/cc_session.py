@@ -13,6 +13,7 @@ from index_store import (
     latest_active_session,
     latest_pending_session,
     load_index,
+    locked_index,
     mark_session_missing,
     now_iso,
     save_index,
@@ -152,7 +153,9 @@ def archive_cancel(index: dict[str, Any], session: dict[str, Any]) -> int:
 
 def archive_after_end(session_id: str, index: dict[str, Any] | None = None) -> int:
     if index is None:
-        index = load_index()
+        with locked_index():
+            index = load_index()
+            return archive_after_end(session_id, index)
     session = get_session(index, session_id)
     if session is None:
         return 0
@@ -223,7 +226,9 @@ def delete_cancel(index: dict[str, Any], session: dict[str, Any]) -> int:
 
 def delete_after_end(session_id: str, index: dict[str, Any] | None = None) -> int:
     if index is None:
-        index = load_index()
+        with locked_index():
+            index = load_index()
+            return delete_after_end(session_id, index)
     session = get_session(index, session_id)
     if session is None:
         return 0
@@ -292,24 +297,25 @@ def main(argv: list[str]) -> int:
             return setup_update("trashDir", args.path)
         return setup_reset(args.key)
 
-    index = load_index()
+    with locked_index():
+        index = load_index()
 
-    if args.command == "delete" and args.session_id == "cancel":
-        session = resolve_session(index, None, allow_pending=True)
-        return delete_cancel(index, session)
+        if args.command == "delete" and args.session_id == "cancel":
+            session = resolve_session(index, None, allow_pending=True)
+            return delete_cancel(index, session)
 
-    if args.command == "archive" and args.session_id == "cancel":
-        session = resolve_session(index, None, allow_pending=True)
-        return archive_cancel(index, session)
+        if args.command == "archive" and args.session_id == "cancel":
+            session = resolve_session(index, None, allow_pending=True)
+            return archive_cancel(index, session)
 
-    allow_pending = args.command in ("delete", "archive")
-    session = resolve_session(index, args.session_id, allow_pending=allow_pending)
+        allow_pending = args.command in ("delete", "archive")
+        session = resolve_session(index, args.session_id, allow_pending=allow_pending)
 
-    if args.command == "archive":
-        return archive_session(index, config, session)
+        if args.command == "archive":
+            return archive_session(index, config, session)
 
-    mode = args.mode or config.get("defaultDeleteMode", "trash")
-    return delete_session(index, config, session, mode)
+        mode = args.mode or config.get("defaultDeleteMode", "trash")
+        return delete_session(index, config, session, mode)
 
 
 if __name__ == "__main__":

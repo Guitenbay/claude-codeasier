@@ -1,6 +1,11 @@
 from __future__ import annotations
 
+import fcntl
 import json
+import os
+import tempfile
+from collections.abc import Generator
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -14,6 +19,18 @@ def index_path() -> Path:
     return state_dir() / "session-index.json"
 
 
+@contextmanager
+def locked_index() -> Generator[None]:
+    ensure_state_dir()
+    lock_path = state_dir() / "session-index.lock"
+    with lock_path.open("a+") as lock_file:
+        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+
+
 def now_iso() -> str:
     return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
@@ -23,7 +40,15 @@ def load_index() -> dict[str, Any]:
     if not path.exists():
         return {"version": INDEX_VERSION, "sessions": {}}
 
-    data = json.loads(path.read_text())
+    try:
+        data = json.loads(path.read_text())
+    except json.JSONDecodeError:
+        quarantine_path = path.with_name(f"{path.name}.corrupt-{now_iso().replace(':', '-')}")
+        path.replace(quarantine_path)
+        return {"version": INDEX_VERSION, "sessions": {}}
+
+    if not isinstance(data, dict):
+        return {"version": INDEX_VERSION, "sessions": {}}
     if "sessions" not in data or not isinstance(data["sessions"], dict):
         data["sessions"] = {}
     if "version" not in data:
@@ -33,7 +58,19 @@ def load_index() -> dict[str, Any]:
 
 def save_index(index: dict[str, Any]) -> dict[str, Any]:
     ensure_state_dir()
-    index_path().write_text(json.dumps(index, indent=2, sort_keys=True) + "\n")
+    path = index_path()
+    payload = json.dumps(index, indent=2, sort_keys=True) + "\n"
+    with tempfile.NamedTemporaryFile("w", dir=path.parent, prefix=f".{path.name}.", suffix=".tmp", delete=False) as tmp:
+        tmp.write(payload)
+        tmp.flush()
+        os.fsync(tmp.fileno())
+        tmp_path = Path(tmp.name)
+    tmp_path.replace(path)
+    dir_fd = os.open(path.parent, os.O_RDONLY)
+    try:
+        os.fsync(dir_fd)
+    finally:
+        os.close(dir_fd)
     return index
 
 
