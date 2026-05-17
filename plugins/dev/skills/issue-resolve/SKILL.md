@@ -5,9 +5,9 @@ disable-model-invocation: true
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write
 ---
 
-如果没有提供 issue 编号，就只输出：`用法: /dev:issue-resolve <issue-num>`，不要执行其他操作。
+如果 `$ARGUMENTS` 为空，就只输出：`用法: /dev:issue-resolve <issue-num>`，不要执行其他操作。
 
-如果提供了 issue 编号，请修复 issue #$1。
+如果提供了 issue 编号，请将 `$ARGUMENTS` 作为 issue 编号，并修复该 issue。
 
 要求：
 - **必须使用独立的 git worktree**，并放在仓库 `.worktrees` 目录下。

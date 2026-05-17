@@ -5,9 +5,9 @@ disable-model-invocation: true
 allowed-tools: Read, Glob, Grep, Bash, WebFetch
 ---
 
-如果没有提供 PR 编号，就只输出：`用法: /dev:pr-followup <pr-number> [focus]`，不要执行其他操作。
+如果 `$ARGUMENTS` 为空，就只输出：`用法: /dev:pr-followup <pr-number> [focus]`，不要执行其他操作。
 
-如果提供了 PR 编号，请按以下流程处理 PR #$1 的 review 后续动作。附加 focus：$2
+如果提供了 PR 编号，请按空白解析 `$ARGUMENTS`：第一个词为 PR 编号，其余内容为可选 focus。然后按以下流程处理该 PR 的 review 后续动作。
 
 # PR Post-Review 处理流程
 
