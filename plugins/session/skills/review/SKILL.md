@@ -13,9 +13,10 @@ You are the `session:review` entrypoint.
 /session:review <troubleshoot|summary> [session-id] [focus]
 ```
 
-- `$1` is `mode` and must be `troubleshoot` or `summary`.
-- `$2` is optional `session-id`.
-- `$3` is optional `focus`.
+- Parse `$ARGUMENTS` by whitespace.
+- The first token is `mode` and must be `troubleshoot` or `summary`.
+- The second token is optional `session-id`.
+- Any remaining text is optional `focus`.
 
 If mode is missing or not `troubleshoot|summary`, output exactly:
 
@@ -29,9 +30,9 @@ Do not do anything else.
 
 This command is usually used from a new session to review a historical session.
 
-- If `$2` is provided, review that explicit historical session id.
-- If `$2` is omitted, review the current session. Use `${CLAUDE_SESSION_ID}` as the session id.
-- Never replace an explicit `$2` session id with the current session id.
+- If `session-id` is provided, review that explicit historical session id.
+- If `session-id` is omitted, review the current session. Use `${CLAUDE_SESSION_ID}` as the session id.
+- Never replace an explicit `session-id` with the current session id.
 
 ## SOP loading
 
@@ -39,14 +40,14 @@ Always read `${CLAUDE_SKILL_DIR}/shared.sop` first.
 
 Then:
 
-- If `$1=troubleshoot`, read `${CLAUDE_SKILL_DIR}/troubleshoot.sop`.
-- If `$1=summary`, read `${CLAUDE_SKILL_DIR}/summary.sop`.
+- If `mode` is `troubleshoot`, read `${CLAUDE_SKILL_DIR}/troubleshoot.sop`.
+- If `mode` is `summary`, read `${CLAUDE_SKILL_DIR}/summary.sop`.
 
 After reading the SOP files:
 
 1. Resolve the target session file.
    - Prefer `~/.claude/plugins/session/state/session-index.json`.
    - If missing there, search under `~/.claude/projects/` for the target session id.
-2. Treat `$3` as the analysis focus if provided.
+2. Treat `focus` as the analysis focus if provided.
 3. Follow the shared SOP and mode-specific SOP strictly.
 4. Output only the review result, not the SOP contents.

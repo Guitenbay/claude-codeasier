@@ -5,13 +5,15 @@ disable-model-invocation: true
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write
 ---
 
-如果没有提供版本号，就只输出：`用法: /release:prep <version>`，不要执行其他操作。
+如果 `$ARGUMENTS` 为空，就只输出：`用法: /release:prep <version>`，不要执行其他操作。
 
-如果提供了版本号 `$1`，请把它作为**本次待发布版本号**，执行完整的发布前置工作流。目标不是直接发布，而是把“可发布”状态准备好，并在关键节点向用户确认。
+如果提供了版本号，请按空白解析 `$ARGUMENTS`：第一个词为**本次待发布版本号**。如果存在额外参数，停止并输出：`用法: /release:prep <version>`。目标不是直接发布，而是把“可发布”状态准备好，并在关键节点向用户确认。
+
+后续流程中所有 `version` 都指从 `$ARGUMENTS` 第一个词解析出的版本号。
 
 版本与发布约束：
 - 版本号必须符合 PEP 440（例如：`0.1.3`、`0.1.3a0`、`0.1.3b1`、`0.1.3rc1`、`0.1.3.dev1`）
-- 最终 tag 必须是 `v$1`
+- 最终 tag 必须是 `v{version}`
 - 结合 `.github/workflows/publish.yml` 与 `.claude/pypi-release-process.md` 执行
 - `main` 是受保护分支，**不能直接 push 到 main**
 - 本命令的目标是准备 changelog + PR，合入后再决定是否打 tag
@@ -34,13 +36,13 @@ allowed-tools: Read, Glob, Grep, Bash, Edit, Write
 ## 阶段 2：必须在独立 worktree 中准备 changelog
 
 1. **必须使用独立 git worktree**，并放在仓库 `.worktrees` 目录下完成本次工作。
-2. 基于 `origin/main` 创建用于本次版本准备的分支，分支名应清晰表达版本目的，例如与 `release-prep-$1` 同类。
+2. 基于 `origin/main` 创建用于本次版本准备的分支，分支名应清晰表达版本目的，例如与 `release-prep-{version}` 同类。
 3. 在该 worktree 中分析最近发布范围：
    - 找到最近一个正式发布基线（优先依据当前仓库发布/tag 语义）
    - 收集从该基线到 `origin/main` 最新提交之间、将被纳入本次版本的已合并 PR
    - 优先使用 PR 元数据；必要时再退化到 commit 信息，并说明精度限制
 4. 更新 `CHANGELOG.md`：
-   - **只追加/插入本次版本对应的新版本条目**，版本标题必须能被 workflow 正确识别，即使用 `## [$1]` 形式
+   - **只追加/插入本次版本对应的新版本条目**，版本标题必须能被 workflow 正确识别，即使用 `## [{version}]` 形式
    - 日期使用当天日期
    - 必须保持当前文件整体风格一致：中文总结 + 分类小节
    - 不要复制现有那个 `## [v0.1.2a0..origin/main]` 草稿式区段的命名方式
@@ -65,7 +67,7 @@ allowed-tools: Read, Glob, Grep, Bash, Edit, Write
 
 1. 提交本次改动（仅包含 `CHANGELOG.md`）
 2. push 分支到远程
-3. 创建 PR，标题和描述应清晰表达“为 `$1` 准备发布说明 / changelog”
+3. 创建 PR，标题和描述应清晰表达“为 `version` 准备发布说明 / changelog”
 4. 向用户返回：
    - worktree 路径
    - 分支名
@@ -78,17 +80,17 @@ allowed-tools: Read, Glob, Grep, Bash, Edit, Write
 
 1. 再次确认 `origin/main` 已包含本次 changelog PR
 2. 在创建 tag 前，基于当前 `origin/main` 复用 `.github/workflows/publish.yml` 的规则做一次**本地 release 校验**：
-   - `CHANGELOG.md` 中存在 `## [$1]` 对应版本条目
+   - `CHANGELOG.md` 中存在 `## [{version}]` 对应版本条目
    - 使用与 workflow 一致的匹配逻辑能够命中该条目，并提取出非空 release notes
    - 如校验失败，停止打 tag，先汇报失败原因并修复 workflow 或 changelog
 3. 然后询问用户：
-   - 是否需要你协助创建并 push tag `v$1`
+   - 是否需要你协助创建并 push tag `v{version}`
    - 或者仅向用户提供命令，由用户自行执行
 4. 如果只是提供命令，应给出适用于本仓库的最小命令序列，例如：
    - `git checkout main`
    - `git pull origin main`
-   - `git tag v$1`
-   - `git push origin v$1`
+   - `git tag v{version}`
+   - `git push origin v{version}`
 5. 如果用户明确授权你代为打 tag，再执行；否则不要擅自创建或 push tag。
 
 ## 阶段 6：可选的发布跟进

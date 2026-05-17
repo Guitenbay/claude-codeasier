@@ -5,9 +5,9 @@ disable-model-invocation: true
 allowed-tools: Read, Glob, Grep, Bash, WebFetch
 ---
 
-如果没有提供 issue 编号，就只输出：`用法: /dev:issue-review <issue_num>`，不要执行其他操作。
+如果 `$ARGUMENTS` 为空，就只输出：`用法: /dev:issue-review <issue_num>`，不要执行其他操作。
 
-如果提供了 issue 编号，请分析 issue #$1 提出的问题改进建议是否确实存在、是否合理，并将分析结果添加到该 issue 评论。
+如果提供了 issue 编号，请按空白解析 `$ARGUMENTS`：第一个词为 issue 编号。如果存在额外参数，停止并输出：`用法: /dev:issue-review <issue_num>`。然后分析该 issue 提出的问题改进建议是否确实存在、是否合理，并将分析结果添加到该 issue 评论。
 
 要求：
 - 先获取完整上下文，再判断建议是否成立。
