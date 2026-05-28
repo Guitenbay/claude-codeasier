@@ -32,7 +32,7 @@ def locked_index() -> Generator[None]:
 
 
 def now_iso() -> str:
-    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")  # noqa: UP017
 
 
 def load_index() -> dict[str, Any]:
