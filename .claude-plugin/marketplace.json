@@ -24,6 +24,11 @@
       "name": "release",
       "description": "Release preparation workflows for changelog, PR, tag, and publish readiness checks.",
       "source": "./plugins/release"
+    },
+    {
+      "name": "understand-me",
+      "description": "Thinking-partner workflow for understanding, challenging, and refining ideas through explicit design decision trees.",
+      "source": "./plugins/understand-me"
     }
   ]
 }

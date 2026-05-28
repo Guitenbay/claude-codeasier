@@ -8,6 +8,7 @@ Current plugins:
 - `dev`
 - `docs`
 - `release`
+- `understand-me`
 
 ## Marketplace usage
 
@@ -34,12 +35,13 @@ Install `session`:
 /reload-plugins
 ```
 
-For other plugins, replace `session` with one of: `dev`, `docs`, `release`.
+For other plugins, replace `session` with one of: `dev`, `docs`, `release`, `understand-me`.
 
 - `session`: `plugins/session/README.md`
 - `dev`: `plugins/dev/README.md`
 - `docs`: `plugins/docs/README.md`
 - `release`: `plugins/release/README.md`
+- `understand-me`: `plugins/understand-me/README.md`
 
 ## Repository structure
 
